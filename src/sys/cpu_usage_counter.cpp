@@ -11,7 +11,6 @@
 
 #include <assert.h>
 #include <cstdio>
-#include <cstring>
 
 #include <iostream>
 #include <string>
@@ -110,19 +109,19 @@ unsigned int get_cpu_count(const string & file_name){
     vector<string> res = split(buff, ' ');
     unsigned long utime = atoi(res[13].c_str());
     unsigned long stime = atoi(res[14].c_str());
-    printf("%lu %lu\n", utime, stime);
+    //printf("%lu %lu\n", utime, stime);
     cpu_count = utime + stime;
     return cpu_count;
 }
 
-map<string, unsigned long> walk_proc(const char pathname[]){
+map<string, pair<string, unsigned long>> walk_proc(const char pathname[]){
     DIR *dfd;
     char name[MAX_PATH];
     struct dirent *dp;
-    map<string, unsigned long> uid_count;
+    map<string, pair<string, unsigned long>> pid_uid_cpu;
     if ((dfd = opendir(pathname)) == NULL){
         printf("dir_order: can't open %s\n %s", pathname,strerror(errno));
-        return uid_count;
+        return pid_uid_cpu;
     }
     while ((dp = readdir(dfd)) != NULL){
         if (strncmp(dp->d_name, ".", 1) == 0)
@@ -136,17 +135,13 @@ map<string, unsigned long> walk_proc(const char pathname[]){
                 string uid = get_uid(name);
 
                 sprintf(name, "%s/%s/stat", pathname, dp->d_name);
-                unsigned int cpu_usage = get_cpu_count(name);
-                if (uid_count.find(uid) == uid_count.end()){
-                    uid_count[uid] = 0;
-                }
-                uid_count[uid] += cpu_usage;
-                cout << name << ' '<< uid << ' ' << cpu_usage << endl;
+                unsigned int cpu_count = get_cpu_count(name);
+                pid_uid_cpu[dp->d_name] = make_pair(uid, cpu_count);
             }
         }
     }
     closedir(dfd);
-    return uid_count;
+    return pid_uid_cpu;
 }
 
 map<string, string> get_uid_name(){
@@ -165,13 +160,27 @@ map<string, string> get_uid_name(){
 }
 
 int main(){
-    map<string, string> dict = get_uid_name();
-    for (auto x : dict){
-        cout << x.first << ' ' << x.second << endl;
-    }
-    map<string, unsigned long> res = walk_proc("/proc");   
-    for (auto x : res){
-        cout << x.first << ' ' << x.second << endl;
+    map<string, string> uid_name = get_uid_name();
+    map<string, pair<string, unsigned long>> pid_uid_cpu_last = walk_proc("/proc");
+    while (true) {
+        sleep(1);
+        map<string, pair<string, unsigned long>> pid_uid_cpu = walk_proc("/proc");   
+        map<string, unsigned long> uid_cpu_usage;
+        for (auto x : pid_uid_cpu){
+            string pid = x.first, uid = x.second.first;
+            unsigned long cpu_count = x.second.second;
+            if (uid_cpu_usage.find(uid) == uid_cpu_usage.end()){
+                uid_cpu_usage[uid] = 0;
+            }
+            if (pid_uid_cpu_last.find(pid) == pid_uid_cpu_last.end() or (pid_uid_cpu_last[pid].first != uid)){
+                uid_cpu_usage[uid] += cpu_count;
+            } else {
+                uid_cpu_usage[uid] += cpu_count - pid_uid_cpu_last[pid].second;
+            }
+        }
+        for (auto info : uid_cpu_usage){
+            cout << "user : " << uid_name[info.first] << ' ' << info.second << endl;
+        }
     }
     return 0;
 }
