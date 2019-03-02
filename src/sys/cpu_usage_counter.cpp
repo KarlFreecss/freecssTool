@@ -29,6 +29,9 @@
 #include <dirent.h>
 #include <cstring>
 
+#include <sys/time.h>
+#include <sys/resource.h>
+
 #define ERROR_EXIT(file, line, name) printf("%s,%d : %s\n", file, line, name)
 
 using namespace std;
@@ -159,19 +162,33 @@ map<string, string> get_uid_name(){
     return ret;
 }
 
+//PRIO_USER does not work now, I do not know why.
+void set_pri(vector<int> pid_list, const int pri){
+    for (auto pid : pid_list){
+        int res = setpriority(PRIO_PROCESS, pid, pri);
+        if (res == -1 & errno != 0){
+            cout << "setpriority result : " << res << ' ' << strerror(errno) << endl;
+        }
+    }
+}
+
+
 int main(){
-    map<string, string> uid_name = get_uid_name();
     map<string, pair<string, unsigned long>> pid_uid_cpu_last = walk_proc("/proc");
     while (true) {
         sleep(1);
+        map<string, string> uid_name = get_uid_name();
         map<string, pair<string, unsigned long>> pid_uid_cpu = walk_proc("/proc");   
         map<string, unsigned long> uid_cpu_usage;
+        map<string, vector<int>> uid_pid_list;
         for (auto x : pid_uid_cpu){
             string pid = x.first, uid = x.second.first;
             unsigned long cpu_count = x.second.second;
             if (uid_cpu_usage.find(uid) == uid_cpu_usage.end()){
                 uid_cpu_usage[uid] = 0;
+                uid_pid_list[uid] = vector<int>();
             }
+            uid_pid_list[uid].push_back(atoi(pid.c_str()));
             if (pid_uid_cpu_last.find(pid) == pid_uid_cpu_last.end() or (pid_uid_cpu_last[pid].first != uid)){
                 uid_cpu_usage[uid] += cpu_count;
             } else {
@@ -180,7 +197,24 @@ int main(){
         }
         for (auto info : uid_cpu_usage){
             cout << "user : " << uid_name[info.first] << ' ' << info.second << endl;
+            //cout << atoi(info.first.c_str()) << endl;
+            if (info.second > 800){
+                set_pri(uid_pid_list[info.first], 1);
+            } else {
+                set_pri(uid_pid_list[info.first], -1);
+                //for (auto pid : uid_pid_list[info.first]){
+                //    int res = setpriority(PRIO_PROCESS, pid, -1);
+                //    if (res == -1 & errno != 0){
+                //        cout << "setpriority result : " << res << ' ' << strerror(errno) << endl;
+                //    }
+                //}
+                //int res = setpriority(PRIO_USER, atoi(info.first.c_str()), 0);
+                //if (res == -1 & errno != 0){
+                //    cout << "setpriority result : " << res << ' ' << strerror(errno) << endl;
+                //}
+            }
         }
+        pid_uid_cpu_last = pid_uid_cpu;
     }
     return 0;
 }
