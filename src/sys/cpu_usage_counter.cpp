@@ -172,7 +172,6 @@ void set_pri(vector<int> pid_list, const int pri){
     }
 }
 
-
 int main(){
     map<string, pair<string, unsigned long>> pid_uid_cpu_last = walk_proc("/proc");
     while (true) {
@@ -197,26 +196,14 @@ int main(){
         }
         for (auto info : uid_cpu_usage){
             cout << "user : " << uid_name[info.first] << ' ' << info.second << endl;
-            //cout << atoi(info.first.c_str()) << endl;
-            if (info.second > 800){
+            if (info.second > 800 / 1){
                 set_pri(uid_pid_list[info.first], 1);
             } else {
                 set_pri(uid_pid_list[info.first], -1);
-                //for (auto pid : uid_pid_list[info.first]){
-                //    int res = setpriority(PRIO_PROCESS, pid, -1);
-                //    if (res == -1 & errno != 0){
-                //        cout << "setpriority result : " << res << ' ' << strerror(errno) << endl;
-                //    }
-                //}
-                //int res = setpriority(PRIO_USER, atoi(info.first.c_str()), 0);
-                //if (res == -1 & errno != 0){
-                //    cout << "setpriority result : " << res << ' ' << strerror(errno) << endl;
-                //}
             }
         }
         pid_uid_cpu_last = pid_uid_cpu;
     }
     return 0;
 }
-
 
