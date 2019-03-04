@@ -1,0 +1,26 @@
+syntax enable
+syntax on
+
+set hlsearch
+filetype on
+
+set autoindent
+set tabstop=4
+set shiftwidth=4
+set expandtab
+set et
+set smarttab
+
+set nu
+set filetype=c
+colorscheme darkblue
+
+map <F5> : call CompileRunGcc()<CR>
+
+func! CompileRunGcc()
+    exec "w"
+    if &filetype == 'python'
+	    exec "!time python %"
+    endif
+endfunc
+
