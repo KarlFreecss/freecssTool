@@ -1,10 +1,6 @@
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/types.h>
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
-#include <sys/resource.h>
 #include <errno.h>
 
 #include <sys/stat.h>
@@ -12,9 +8,6 @@
 #include <assert.h>
 #include <cstdio>
 
-#include <iostream>
-#include <string>
-#include <vector>
 #include <sstream>
 
 #include <cstdio>
@@ -28,6 +21,7 @@
 #include <map>
 #include <dirent.h>
 #include <cstring>
+#include <sched.h>
 
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -172,6 +166,26 @@ void set_pri(vector<int> pid_list, const int pri){
     }
 }
 
+void set_running_cpu(vector<int> pid_list, vector<int> cpu_ids){
+    cpu_set_t mask;
+    CPU_ZERO(&mask);
+    for (auto cpu : cpu_ids){
+        CPU_SET(cpu, &mask);
+    }
+    for (auto pid : pid_list){
+        cpu_set_t set_cpus;
+        int res = sched_getaffinity(pid, sizeof(cpu_set_t), &set_cpus);
+        for (auto cpu : cpu_ids){
+            printf("%d %d %d\n", pid, cpu, CPU_ISSET(cpu, &set_cpus));
+        }
+
+        res = sched_setaffinity(pid, sizeof(cpu_set_t), &mask);
+        if (res < 0){
+            printf("Error: setaffinity()\n");
+        }
+    }
+}
+
 int main(){
     map<string, pair<string, unsigned long>> pid_uid_cpu_last = walk_proc("/proc");
     while (true) {
@@ -196,11 +210,13 @@ int main(){
         }
         for (auto info : uid_cpu_usage){
             cout << "user : " << uid_name[info.first] << ' ' << info.second << endl;
-            if (info.second > 800 / 1){
-                set_pri(uid_pid_list[info.first], 1);
-            } else {
-                set_pri(uid_pid_list[info.first], -1);
-            }
+            vector<int> cpu_ids = {1, 2};
+            set_running_cpu(uid_pid_list[info.first], cpu_ids);
+            //if (info.second > 800 / 1){
+            //    set_pri(uid_pid_list[info.first], 1);
+            //} else {
+            //    set_pri(uid_pid_list[info.first], -1);
+            //}
         }
         pid_uid_cpu_last = pid_uid_cpu;
     }
