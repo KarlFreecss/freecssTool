@@ -37,7 +37,7 @@ const int TOTAL_CPU_NUM = 56;
 const int USER_LIMIT_CPU_NUM = 6;
 const double CPU_USAGE_THRESHHOLD = 0.05;
 const double CPU_ASSIGN_RATE = 0.85;
-const int SCHEDULE_T = 100; // 10 ms
+const int SCHEDULE_T = 200; // 10 ms
 const int MORE_THAN_USER_NEED = 4;
 
 vector<string> split(string str, const char c){
@@ -212,7 +212,7 @@ void schedule_user_cpu(const map<string, unsigned long> &uid_cpu_usage, map<stri
     int free_cpu_num = TOTAL_CPU_NUM * CPU_ASSIGN_RATE;
     int cpu_wait_assign_index = 0;
     for (auto info : uid_cpu_usage){
-        const int user_cpu_usage = (info.second - 1) / SCHEDULE_T + 1;
+        const int user_cpu_usage = ((long)info.second - 1) / SCHEDULE_T + 1;
         cpu_user_paris.push_back(make_pair(user_cpu_usage, info.first));
         over_limit_user_num += user_cpu_usage > USER_LIMIT_CPU_NUM;
     }
@@ -243,7 +243,7 @@ void schedule_user_cpu(const map<string, unsigned long> &uid_cpu_usage, map<stri
     }
     for (auto info : uid_cpu_usage){
         string user = info.first;
-        cout << "user: " << uid_name[user] << "    usage: " << info.second << "    assign : " << user_assign_cpu_num[user] << endl;
+        cout << "user: " << uid_name[user] << "    usage: " << info.second / SCHEDULE_T << "    assign : " << user_assign_cpu_num[user] << endl;
         if (user_assign_cpu_num[user] == TOTAL_CPU_NUM){
             set_running_cpu(uid_pid_list[user], assign_all_cpu);
         } else {
