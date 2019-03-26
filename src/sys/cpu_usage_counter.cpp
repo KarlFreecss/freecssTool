@@ -22,6 +22,7 @@
 #include <dirent.h>
 #include <cstring>
 #include <sched.h>
+#include <algorithm>
 
 #include <sys/time.h>
 #include <sys/resource.h>
@@ -31,6 +32,13 @@
 using namespace std;
 const int MAX_PATH = 1024;
 const int MAX_BUFFER_SIZE = 1024;
+
+const int TOTAL_CPU_NUM = 56;
+const int USER_LIMIT_CPU_NUM = 6;
+const double CPU_USAGE_THRESHHOLD = 0.05;
+const double CPU_ASSIGN_RATE = 0.85;
+const int SCHEDULE_T = 100; // 10 ms
+const int MORE_THAN_USER_NEED = 4;
 
 vector<string> split(string str, const char c){
     vector<string> ret;
@@ -166,7 +174,17 @@ void set_pri(vector<int> pid_list, const int pri){
     }
 }
 
-void set_running_cpu(vector<int> pid_list, vector<int> cpu_ids){
+void set_running_cpu(const vector<int> &pid_list, const vector<int> &cpu_ids){
+    ///////////////begin test code
+    if (cpu_ids.size() > 40) return;
+    for (int i = 0; i < pid_list.size(); ++i){
+        cout << pid_list[i] << ' ';
+    } cout << " :   " ;
+    for (int i = 0; i < cpu_ids.size(); ++i){
+        cout << cpu_ids[i] << ' ';
+    } cout << endl;
+    return ;
+    //////////////end test code
     cpu_set_t mask;
     CPU_ZERO(&mask);
     for (auto cpu : cpu_ids){
@@ -186,14 +204,66 @@ void set_running_cpu(vector<int> pid_list, vector<int> cpu_ids){
     }
 }
 
+void schedule_user_cpu(const map<string, unsigned long> &uid_cpu_usage, map<string, vector<int>> &uid_pid_list){
+    cout << "\n\n\n\n" << endl;
+    map<string, string> uid_name = get_uid_name();
+    vector<pair<int, string>> cpu_user_paris;
+    int over_limit_user_num = 0;
+    int free_cpu_num = TOTAL_CPU_NUM * CPU_ASSIGN_RATE;
+    int cpu_wait_assign_index = 0;
+    for (auto info : uid_cpu_usage){
+        const int user_cpu_usage = (info.second - 1) / SCHEDULE_T + 1;
+        cpu_user_paris.push_back(make_pair(user_cpu_usage, info.first));
+        over_limit_user_num += user_cpu_usage > USER_LIMIT_CPU_NUM;
+    }
+    sort(cpu_user_paris.begin(), cpu_user_paris.end());
+    cout << over_limit_user_num << " users are over cpu usage limit!" << endl;
+
+    map<string, int> user_assign_cpu_num;
+
+    for (int i = 0; i < cpu_user_paris.size(); ++i){
+        //cout << "user: " << uid_name[cpu_user_paris[i].second] << ' ' <<  cpu_user_paris[i].first << endl;
+        int assign_num = TOTAL_CPU_NUM;
+        if (cpu_user_paris[i].first > USER_LIMIT_CPU_NUM){
+            // info.second > USER_LIMIT_CPU_NUM sure over_limit_user_num bigger than 0
+            const int max_assign_num = free_cpu_num / over_limit_user_num;
+            const int require_assign_num = cpu_user_paris[i].first + MORE_THAN_USER_NEED;
+            assign_num = min(require_assign_num, max_assign_num);
+
+            //cpu pool decrease and waitting user decrease
+            free_cpu_num -= assign_num;
+            over_limit_user_num -= 1;
+        }
+        user_assign_cpu_num[cpu_user_paris[i].second] = assign_num;
+    }
+
+    vector<int> assign_all_cpu;
+    for (int i = 0; i < TOTAL_CPU_NUM; ++i){
+        assign_all_cpu.push_back(i);
+    }
+    for (auto info : uid_cpu_usage){
+        string user = info.first;
+        cout << "user: " << uid_name[user] << "    usage: " << info.second << "    assign : " << user_assign_cpu_num[user] << endl;
+        if (user_assign_cpu_num[user] == TOTAL_CPU_NUM){
+            set_running_cpu(uid_pid_list[user], assign_all_cpu);
+        } else {
+            vector<int> assign_cpu_list;
+            for (int i = 0; i < user_assign_cpu_num[user]; ++i){
+                assign_cpu_list.push_back(cpu_wait_assign_index++);
+            }
+            set_running_cpu(uid_pid_list[user], assign_cpu_list);
+        }
+    }
+}
+
 int main(){
     map<string, pair<string, unsigned long>> pid_uid_cpu_last = walk_proc("/proc");
     while (true) {
-        sleep(1);
-        map<string, string> uid_name = get_uid_name();
+        sleep(SCHEDULE_T / 100);
         map<string, pair<string, unsigned long>> pid_uid_cpu = walk_proc("/proc");   
         map<string, unsigned long> uid_cpu_usage;
         map<string, vector<int>> uid_pid_list;
+        int total_cpu_usage = 0;
         for (auto x : pid_uid_cpu){
             string pid = x.first, uid = x.second.first;
             unsigned long cpu_count = x.second.second;
@@ -202,21 +272,17 @@ int main(){
                 uid_pid_list[uid] = vector<int>();
             }
             uid_pid_list[uid].push_back(atoi(pid.c_str()));
+            int proc_cpu_usage = 0;
             if (pid_uid_cpu_last.find(pid) == pid_uid_cpu_last.end() or (pid_uid_cpu_last[pid].first != uid)){
-                uid_cpu_usage[uid] += cpu_count;
+                proc_cpu_usage = cpu_count;
             } else {
-                uid_cpu_usage[uid] += cpu_count - pid_uid_cpu_last[pid].second;
+                proc_cpu_usage += cpu_count - pid_uid_cpu_last[pid].second;
             }
+            uid_cpu_usage[uid] += proc_cpu_usage;
+            total_cpu_usage += proc_cpu_usage;
         }
-        for (auto info : uid_cpu_usage){
-            cout << "user : " << uid_name[info.first] << ' ' << info.second << endl;
-            vector<int> cpu_ids = {1, 2};
-            set_running_cpu(uid_pid_list[info.first], cpu_ids);
-            //if (info.second > 800 / 1){
-            //    set_pri(uid_pid_list[info.first], 1);
-            //} else {
-            //    set_pri(uid_pid_list[info.first], -1);
-            //}
+        if (total_cpu_usage > CPU_USAGE_THRESHHOLD * SCHEDULE_T * TOTAL_CPU_NUM){
+            schedule_user_cpu(uid_cpu_usage, uid_pid_list);
         }
         pid_uid_cpu_last = pid_uid_cpu;
     }
