@@ -35,7 +35,7 @@ const int MAX_BUFFER_SIZE = 1024;
 
 const int TOTAL_CPU_NUM = 56;
 const int USER_LIMIT_CPU_NUM = 6;
-const double CPU_ASSIGN_RATE = 0.85;
+const double CPU_ASSIGN_RATE = 0.95;
 const int SCHEDULE_T = 200; // 10 ms
 const int MORE_THAN_USER_NEED = USER_LIMIT_CPU_NUM * 0.5;
 
@@ -174,7 +174,7 @@ void set_pri(vector<int> pid_list, const int pri){
 }
 
 void set_running_cpu(const vector<int> &pid_list, const vector<int> &cpu_ids){
-    ///////////////begin test code
+    /////////////begin test code
     if (cpu_ids.size() > 40) return;
     for (int i = 0; i < pid_list.size(); ++i){
         cout << pid_list[i] << ' ';
@@ -182,25 +182,32 @@ void set_running_cpu(const vector<int> &pid_list, const vector<int> &cpu_ids){
     for (int i = 0; i < cpu_ids.size(); ++i){
         cout << cpu_ids[i] << ' ';
     } cout << endl;
-    return ;
-    //////////////end test code
+    ////////////end test code
     cpu_set_t mask;
     CPU_ZERO(&mask);
     for (auto cpu : cpu_ids){
         CPU_SET(cpu, &mask);
     }
+    int count = 0;
     for (auto pid : pid_list){
         cpu_set_t set_cpus;
         int res = sched_getaffinity(pid, sizeof(cpu_set_t), &set_cpus);
+        int not_in = 0;
         for (auto cpu : cpu_ids){
-            printf("%d %d %d\n", pid, cpu, CPU_ISSET(cpu, &set_cpus));
+            if (!CPU_ISSET(cpu, &set_cpus)){
+                not_in++;
+            }
         }
-
+        if (not_in == 0){
+            continue;
+        }
         res = sched_setaffinity(pid, sizeof(cpu_set_t), &mask);
         if (res < 0){
-            printf("Error: setaffinity()\n");
+            printf("errno: %2d\t%s %d\n", errno,strerror(errno), res);
+            count++;
         }
     }
+    printf("Error: setaffinity(), num: %d\n", count);
 }
 
 void schedule_user_cpu(const map<string, unsigned long> &uid_cpu_usage, map<string, vector<int>> &uid_pid_list){
