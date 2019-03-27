@@ -35,10 +35,9 @@ const int MAX_BUFFER_SIZE = 1024;
 
 const int TOTAL_CPU_NUM = 56;
 const int USER_LIMIT_CPU_NUM = 6;
-const double CPU_USAGE_THRESHHOLD = 0.05;
 const double CPU_ASSIGN_RATE = 0.85;
 const int SCHEDULE_T = 200; // 10 ms
-const int MORE_THAN_USER_NEED = 4;
+const int MORE_THAN_USER_NEED = USER_LIMIT_CPU_NUM * 0.5;
 
 vector<string> split(string str, const char c){
     vector<string> ret;
@@ -281,9 +280,7 @@ int main(){
             uid_cpu_usage[uid] += proc_cpu_usage;
             total_cpu_usage += proc_cpu_usage;
         }
-        if (total_cpu_usage > CPU_USAGE_THRESHHOLD * SCHEDULE_T * TOTAL_CPU_NUM){
-            schedule_user_cpu(uid_cpu_usage, uid_pid_list);
-        }
+        schedule_user_cpu(uid_cpu_usage, uid_pid_list);
         pid_uid_cpu_last = pid_uid_cpu;
     }
     return 0;
