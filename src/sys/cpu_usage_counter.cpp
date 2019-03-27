@@ -207,7 +207,9 @@ void set_running_cpu(const vector<int> &pid_list, const vector<int> &cpu_ids){
             count++;
         }
     }
-    printf("Error: setaffinity(), num: %d\n", count);
+    if (count > 0){
+        printf("Error: setaffinity(), num: %d\n", count);
+    }
 }
 
 void schedule_user_cpu(const map<string, unsigned long> &uid_cpu_usage, map<string, vector<int>> &uid_pid_list){
@@ -216,6 +218,7 @@ void schedule_user_cpu(const map<string, unsigned long> &uid_cpu_usage, map<stri
     vector<pair<int, string>> cpu_user_paris;
     int over_limit_user_num = 0;
     int free_cpu_num = TOTAL_CPU_NUM * CPU_ASSIGN_RATE;
+    cout << "total assign cpu num : " << free_cpu_num << endl;
     int cpu_wait_assign_index = 0;
     for (auto info : uid_cpu_usage){
         const int user_cpu_usage = ((long)info.second - 1) / SCHEDULE_T + 1;
