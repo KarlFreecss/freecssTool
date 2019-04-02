@@ -35,7 +35,7 @@ const int MAX_BUFFER_SIZE = 1024;
 
 const int TOTAL_CPU_NUM = 56;
 const int USER_LIMIT_CPU_NUM = 6;
-const double CPU_ASSIGN_RATE = 0.95;
+const double CPU_ASSIGN_RATE = 0.85;
 const int SCHEDULE_T = 200; // 10 ms
 const int MORE_THAN_USER_NEED = USER_LIMIT_CPU_NUM * 0.5;
 
@@ -219,7 +219,7 @@ void schedule_user_cpu(const map<string, unsigned long> &uid_cpu_usage, map<stri
     int over_limit_user_num = 0;
     int free_cpu_num = TOTAL_CPU_NUM * CPU_ASSIGN_RATE;
     cout << "total assign cpu num : " << free_cpu_num << endl;
-    int cpu_wait_assign_index = 0;
+    int cpu_wait_assign_index = 3;
     for (auto info : uid_cpu_usage){
         const int user_cpu_usage = ((long)info.second - 1) / SCHEDULE_T + 1;
         cpu_user_paris.push_back(make_pair(user_cpu_usage, info.first));
